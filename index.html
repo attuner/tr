@@ -2,597 +2,275 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>24/7 Automated Radio Scheduler (Zero Background Sleep)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="theme-color" content="#0f172a" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <title>Mobile Radio Scheduler</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <style>
-    @keyframes pulse-ring {
-      0% { transform: scale(0.95); opacity: 0.8; }
-      50% { transform: scale(1.1); opacity: 0.4; }
-      100% { transform: scale(0.95); opacity: 0.8; }
-    }
-    .pulse-active { animation: pulse-ring 2s infinite ease-in-out; }
-  </style>
 </head>
-<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col font-sans">
-  <div class="max-w-4xl mx-auto w-full p-4 sm:p-6 flex-1 flex flex-col space-y-6">
+<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col font-sans select-none">
+  <div class="max-w-md mx-auto w-full p-4 flex-1 flex flex-col justify-between">
     
-    <!-- Header -->
-    <header class="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-800 pb-4 gap-4">
+    <!-- Top Bar -->
+    <header class="flex items-center justify-between border-b border-slate-800 pb-3">
       <div>
-        <h1 class="text-2xl font-bold tracking-tight text-white flex items-center gap-2">
-          <span>📻</span> Radio Scheduler Engine
+        <h1 class="text-lg font-bold text-white flex items-center gap-1.5">
+          <span>📻</span> Mobile Radio Slot Engine
         </h1>
-        <p class="text-xs text-slate-400 mt-1">
-          Zero-Throttle Background Engine • Dedicated WebWorker Heartbeat • Screen Wake Lock
-        </p>
+        <p class="text-[11px] text-slate-400">PWA & Mobile Background Ready</p>
       </div>
       <div class="text-right">
-        <div id="clockDisplay" class="text-3xl font-mono font-bold text-emerald-400">00:00:00</div>
-        <div id="engineStateBadge" class="inline-flex items-center gap-1.5 px-2.5 py-0.5 mt-1 rounded-full text-xs font-medium bg-rose-950 text-rose-300 border border-rose-800">
-          <span class="w-2 h-2 rounded-full bg-rose-500"></span> Disarmed (Idle)
-        </div>
+        <div id="clockDisplay" class="text-2xl font-mono font-bold text-emerald-400">00:00:00</div>
       </div>
     </header>
 
-    <!-- Main Controller Card -->
-    <section class="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl relative overflow-hidden">
-      <div class="flex flex-col md:flex-row items-center justify-between gap-6">
-        <div class="flex items-center gap-5 w-full md:w-auto">
-          <div id="statusIndicatorRing" class="w-16 h-16 rounded-2xl bg-slate-800 border border-slate-700 flex items-center justify-center text-3xl shrink-0 transition-all duration-300">
-            ⏸️
-          </div>
-          <div>
-            <div class="text-xs font-semibold tracking-wider uppercase text-slate-400" id="currentSlotStatus">
-              Awaiting Engine Activation
-            </div>
-            <h2 class="text-xl font-bold text-white truncate max-w-xs sm:max-w-md" id="currentStationTitle">
-              No Station Active
-            </h2>
-            <p class="text-xs text-slate-400 mt-1 font-mono" id="currentTimingDetails">
-              Click "Start Engine" to grant autoplay permissions.
-            </p>
-          </div>
-        </div>
-
-        <div class="flex flex-wrap items-center gap-3 w-full md:w-auto justify-end">
-          <button id="toggleEngineBtn" class="px-6 py-3 rounded-xl font-bold text-sm shadow-lg transition-all duration-200 bg-emerald-500 hover:bg-emerald-400 text-slate-950 flex items-center gap-2">
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-            Start Background Engine
-          </button>
-        </div>
+    <!-- Main Card -->
+    <div class="my-auto py-6 flex flex-col items-center text-center space-y-4">
+      <div id="statusIcon" class="w-24 h-24 rounded-3xl bg-slate-900 border border-slate-800 flex items-center justify-center text-4xl shadow-xl transition-all duration-300">
+        ⏸️
       </div>
 
-      <!-- Volume & Wake Lock Notice -->
-      <div class="mt-6 pt-5 border-t border-slate-800/80 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-slate-400">
-        <div class="flex items-center gap-3 w-full sm:w-auto">
-          <span>🔊 Volume:</span>
-          <input type="range" id="volumeSlider" min="0" max="1" step="0.05" value="0.8" class="w-32 accent-emerald-500 bg-slate-800 rounded-lg h-2 cursor-pointer">
-          <span id="volumePercent" class="font-mono text-slate-300 w-10">80%</span>
-        </div>
-        <div class="flex items-center gap-4">
-          <span id="wakeLockStatus" class="text-slate-500 flex items-center gap-1.5">
-            <span class="w-2 h-2 rounded-full bg-slate-600"></span> WakeLock: Off
-          </span>
-          <span id="carrierStatus" class="text-slate-500 flex items-center gap-1.5">
-            <span class="w-2 h-2 rounded-full bg-slate-600"></span> Keep-Alive Carrier: Inactive
-          </span>
-        </div>
-      </div>
-    </section>
-
-    <!-- Scheduled Slots Table -->
-    <section class="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl">
-      <div class="flex items-center justify-between mb-4">
-        <h3 class="text-sm font-semibold uppercase tracking-wider text-slate-300 flex items-center gap-2">
-          <span>📅</span> Program Schedule Slots
-        </h3>
-        <span class="text-xs text-slate-500">Auto-plays strictly inside start &amp; end times</span>
+      <div>
+        <span id="slotStatusBadge" class="inline-block px-3 py-1 rounded-full text-xs font-semibold bg-slate-800 text-slate-400 border border-slate-700">
+          Engine Disarmed
+        </span>
+        <h2 id="currentStationTitle" class="text-xl font-bold text-white mt-2">No Active Stream</h2>
+        <p id="timingInfo" class="text-xs text-slate-400 mt-1">Tap below to arm mobile background engine</p>
       </div>
 
-      <div class="overflow-x-auto">
-        <table class="w-full text-left text-sm text-slate-300">
-          <thead class="bg-slate-950/60 text-xs uppercase text-slate-400 border-b border-slate-800">
-            <tr>
-              <th class="py-3 px-4">Station</th>
-              <th class="py-3 px-4">Slot Time (24h)</th>
-              <th class="py-3 px-4">Duration</th>
-              <th class="py-3 px-4 text-center">Status</th>
-              <th class="py-3 px-4 text-right">Quick Test</th>
-            </tr>
-          </thead>
-          <tbody id="slotsTableBody" class="divide-y divide-slate-800 font-mono text-xs">
-            <!-- Dynamic Schedule Rows -->
-          </tbody>
-        </table>
-      </div>
-    </section>
+      <button id="mainToggleBtn" class="w-full py-4 px-6 rounded-2xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-base shadow-lg transition active:scale-95 flex items-center justify-center gap-2">
+        <span>🚀</span> Arm Mobile Engine
+      </button>
 
-    <!-- Activity Log Console -->
-    <section class="bg-slate-900 border border-slate-800 rounded-2xl p-4 shadow-xl flex-1 flex flex-col">
-      <div class="flex items-center justify-between mb-2">
-        <span class="text-xs uppercase font-bold tracking-wider text-slate-400">Engine Event Logs</span>
-        <button id="clearLogsBtn" class="text-xs text-slate-500 hover:text-slate-300">Clear</button>
+      <div class="w-full bg-slate-900/60 border border-slate-800 p-3 rounded-xl text-left text-[11px] text-slate-400 space-y-1">
+        <div class="font-semibold text-slate-300">Mobile Background Checklist:</div>
+        <div>✓ Keep media volume up (silent loop running).</div>
+        <div>✓ Android: Set Browser Battery to <strong>Unrestricted</strong>.</div>
+        <div>✓ Do not force-quit/swipe away browser from recent apps.</div>
       </div>
-      <div id="logConsole" class="bg-slate-950 p-3 rounded-xl font-mono text-[11px] leading-relaxed text-slate-400 h-36 overflow-y-auto space-y-1 border border-slate-800/80">
+    </div>
+
+    <!-- Schedule List -->
+    <div class="border-t border-slate-800 pt-3">
+      <div class="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">Program Slots</div>
+      <div id="slotsList" class="space-y-2">
+        <!-- Rendered via JS -->
       </div>
-    </section>
+    </div>
   </div>
 
-  <!-- Audio Element with explicit cross-origin policy -->
-  <audio id="radioPlayer" preload="none" crossorigin="anonymous"></audio>
+  <!-- Primary Dedicated Audio Player -->
+  <audio id="mobilePlayer" playsinline preload="auto"></audio>
 
   <script>
-    // --- 1. DEFAULT SLOTS CONFIGURATION ---
+    // Minimal 1-second valid silent MP3 encoded in base64
+    const SILENT_AUDIO_URI = "data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4Ljc2LjEwMAAAAAAAAAAAAAAA//OEAAAAAAAAAAAAAAAAAAAAAAAASW5mbwAAAA8AAAAFAAAA7gAAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBA/////wAAAABMYXZjNTguMTM0AAAAAAAAAAAAAAAkAkAAAAAAAAAA7gC6c8mSAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
+
     const scheduleSlots = [
       {
         id: "bbc",
         name: "BBC World Service",
-        startTime: "15:35",
-        endTime: "15:40",
+        startTime: "16:00",
+        endTime: "16:05",
         url: "https://stream.live.vc.bbcmedia.co.uk/bbc_world_service"
       },
       {
         id: "jazz",
         name: "Radio Swiss Jazz",
-        startTime: "15:45",
-        endTime: "15:50",
+        startTime: "16:10",
+        endTime: "16:15",
         url: "https://stream.srg-ssr.ch/m/rsj/mp3_128"
       },
       {
         id: "kexp",
         name: "KEXP 90.3 FM Seattle",
-        startTime: "15:50",
-        endTime: "15:55",
+        startTime: "16:20",
+        endTime: "16:25",
         url: "https://kexp.streamguys1.com/kexp128.mp3"
       },
       {
         id: "fip",
-        name: "FIP Radio (Radio France)",
-        startTime: "15:59",
-        endTime: "16:04",
+        name: "FIP Radio",
+        startTime: "16:30",
+        endTime: "16:35",
         url: "https://stream.radiofrance.fr/fip/fip.m3u8?id=radiofrance"
       }
     ];
 
-    // --- 2. STATE VARIABLES ---
-    let isEngineArmed = false;
+    let isArmed = false;
     let activeSlotId = null;
-    let wakeLock = null;
-    let audioContext = null;
-    let carrierOscillator = null;
-    let workerTimer = null;
-    let reconnectAttempts = 0;
-    let isReconnecting = false;
+    let worker = null;
 
-    // DOM Elements
-    const audioEl = document.getElementById("radioPlayer");
-    const toggleEngineBtn = document.getElementById("toggleEngineBtn");
-    const engineStateBadge = document.getElementById("engineStateBadge");
+    const player = document.getElementById("mobilePlayer");
+    const mainToggleBtn = document.getElementById("mainToggleBtn");
     const clockDisplay = document.getElementById("clockDisplay");
-    const currentSlotStatus = document.getElementById("currentSlotStatus");
+    const statusIcon = document.getElementById("statusIcon");
+    const slotStatusBadge = document.getElementById("slotStatusBadge");
     const currentStationTitle = document.getElementById("currentStationTitle");
-    const currentTimingDetails = document.getElementById("currentTimingDetails");
-    const statusIndicatorRing = document.getElementById("statusIndicatorRing");
-    const volumeSlider = document.getElementById("volumeSlider");
-    const volumePercent = document.getElementById("volumePercent");
-    const wakeLockStatus = document.getElementById("wakeLockStatus");
-    const carrierStatus = document.getElementById("carrierStatus");
-    const slotsTableBody = document.getElementById("slotsTableBody");
-    const logConsole = document.getElementById("logConsole");
-    const clearLogsBtn = document.getElementById("clearLogsBtn");
+    const timingInfo = document.getElementById("timingInfo");
+    const slotsList = document.getElementById("slotsList");
 
-    function log(message, type = "info") {
-      const timeStr = new Date().toLocaleTimeString();
-      const entry = document.createElement("div");
-      let color = "text-slate-400";
-      if (type === "success") color = "text-emerald-400";
-      if (type === "warn") color = "text-amber-400";
-      if (type === "error") color = "text-rose-400";
-
-      entry.className = color;
-      entry.textContent = `[${timeStr}] ${message}`;
-      logConsole.appendChild(entry);
-      logConsole.scrollTop = logConsole.scrollHeight;
-    }
-
-    // --- 3. UNTHROTTLED WEB WORKER TIMER ---
-    // Background tabs throttle setInterval to 1 tick/min or pause it completely.
-    // Web Workers run in a distinct thread that doesn't get clamped.
-    function startWorkerTimer() {
-      const workerCode = `
-        setInterval(() => {
-          postMessage('tick');
-        }, 1000);
-      `;
-      const blob = new Blob([workerCode], { type: "application/javascript" });
-      workerTimer = new Worker(URL.createObjectURL(blob));
-      workerTimer.onmessage = () => {
-        handleClockTick();
-      };
-    }
-
-    function stopWorkerTimer() {
-      if (workerTimer) {
-        workerTimer.terminate();
-        workerTimer = null;
-      }
-    }
-
-    // --- 4. CONTINUOUS SILENT CARRIER (PREVENTS BACKGROUND TAB SLEEP) ---
-    // A live audio pipeline active in the Web Audio context prevents OS tab discards.
-    function startKeepAliveCarrier() {
-      try {
-        const AudioCtx = window.AudioContext || window.webkitAudioContext;
-        audioContext = new AudioCtx();
-
-        carrierOscillator = audioContext.createOscillator();
-        const gainNode = audioContext.createGain();
-        
-        // Virtually zero volume (0.000001) - inaudible to human ears but fully keeps hardware active
-        carrierOscillator.type = "sine";
-        carrierOscillator.frequency.setValueAtTime(40, audioContext.currentTime); // Low 40Hz hum
-        gainNode.gain.setValueAtTime(0.000001, audioContext.currentTime);
-
-        carrierOscillator.connect(gainNode);
-        gainNode.connect(audioContext.destination);
-        carrierOscillator.start();
-
-        carrierStatus.innerHTML = '<span class="w-2 h-2 rounded-full bg-emerald-400"></span> Keep-Alive Carrier: Active';
-        carrierStatus.className = "text-emerald-400 flex items-center gap-1.5";
-        log("Keep-alive silent audio carrier running.", "success");
-      } catch (err) {
-        log("Web Audio keep-alive initialization failed: " + err.message, "warn");
-      }
-    }
-
-    function stopKeepAliveCarrier() {
-      if (carrierOscillator) {
-        try { carrierOscillator.stop(); } catch(e) {}
-        carrierOscillator = null;
-      }
-      if (audioContext && audioContext.state !== "closed") {
-        audioContext.close();
-        audioContext = null;
-      }
-      carrierStatus.innerHTML = '<span class="w-2 h-2 rounded-full bg-slate-600"></span> Keep-Alive Carrier: Inactive';
-      carrierStatus.className = "text-slate-500 flex items-center gap-1.5";
-    }
-
-    // --- 5. SCREEN WAKE LOCK API ---
-    async function requestWakeLock() {
-      if ("wakeLock" in navigator) {
-        try {
-          wakeLock = await navigator.wakeLock.request("screen");
-          wakeLockStatus.innerHTML = '<span class="w-2 h-2 rounded-full bg-emerald-400"></span> WakeLock: Active';
-          wakeLockStatus.className = "text-emerald-400 flex items-center gap-1.5";
-          log("Screen wake lock acquired.", "success");
-
-          wakeLock.addEventListener("release", () => {
-            if (isEngineArmed) {
-              requestWakeLock(); // Auto re-acquire if lost
-            } else {
-              wakeLockStatus.innerHTML = '<span class="w-2 h-2 rounded-full bg-slate-600"></span> WakeLock: Off';
-              wakeLockStatus.className = "text-slate-500 flex items-center gap-1.5";
-            }
-          });
-        } catch (err) {
-          log("WakeLock request refused: " + err.message, "warn");
-        }
-      }
-    }
-
-    function releaseWakeLock() {
-      if (wakeLock) {
-        wakeLock.release().catch(() => {});
-        wakeLock = null;
-      }
-      wakeLockStatus.innerHTML = '<span class="w-2 h-2 rounded-full bg-slate-600"></span> WakeLock: Off';
-      wakeLockStatus.className = "text-slate-500 flex items-center gap-1.5";
-    }
-
-    // --- 6. TIME HELPERS & SCHEDULER ENGINE ---
-    function parseTimeToMinutes(timeStr) {
+    function parseToMinutes(timeStr) {
       const [h, m] = timeStr.split(":").map(Number);
       return h * 60 + m;
     }
 
-    function isCurrentTimeInside(startTime, endTime, currentMins) {
-      const s = parseTimeToMinutes(startTime);
-      const e = parseTimeToMinutes(endTime);
-      if (s <= e) {
-        return currentMins >= s && currentMins < e;
-      } else {
-        // Spans past midnight
-        return currentMins >= s || currentMins < e;
+    function isInsideSlot(start, end, current) {
+      const s = parseToMinutes(start);
+      const e = parseToMinutes(end);
+      return s <= e ? (current >= s && current < e) : (current >= s || current < e);
+    }
+
+    function checkActiveSlot() {
+      const now = new Date();
+      const currentMin = now.getHours() * 60 + now.getMinutes();
+      return scheduleSlots.find(s => isInsideSlot(s.startTime, s.endTime, currentMin)) || null;
+    }
+
+    // Unthrottled Web Worker
+    function initWorker() {
+      const blob = new Blob([`setInterval(() => postMessage('tick'), 1000);`], { type: 'application/javascript' });
+      worker = new Worker(URL.createObjectURL(blob));
+      worker.onmessage = evaluateSchedule;
+    }
+
+    function setSilentCarrier() {
+      player.loop = true;
+      player.src = SILENT_AUDIO_URI;
+      player.play().catch(e => console.warn("Carrier error:", e));
+      if ('mediaSession' in navigator) {
+        navigator.mediaSession.metadata = new MediaMetadata({
+          title: "Standby Engine Running",
+          artist: "Mobile Radio Scheduler",
+          album: "Waiting for scheduled time slot"
+        });
+        navigator.mediaSession.playbackState = "playing";
       }
     }
 
-    function getActiveScheduleSlot(now) {
-      const currentMins = now.getHours() * 60 + now.getMinutes();
-      return scheduleSlots.find(slot => isCurrentTimeInside(slot.startTime, slot.endTime, currentMins)) || null;
-    }
-
-    function updateMediaSession(slot) {
-      if ("mediaSession" in navigator) {
-        if (slot) {
-          navigator.mediaSession.metadata = new MediaMetadata({
-            title: slot.name,
-            artist: "Scheduled Live Stream",
-            album: `${slot.startTime} - ${slot.endTime}`
-          });
-          navigator.mediaSession.playbackState = "playing";
-        } else {
-          navigator.mediaSession.playbackState = "none";
-        }
-      }
-    }
-
-    function playStationStream(slot) {
-      if (activeSlotId === slot.id && !audioEl.paused) return;
-
+    function transitionToStream(slot) {
       activeSlotId = slot.id;
-      reconnectAttempts = 0;
-      isReconnecting = false;
+      player.loop = false;
+      player.src = slot.url;
+      player.play().catch(e => console.error("Stream play error:", e));
 
-      log(`Entering slot: Starting "${slot.name}" (${slot.startTime} - ${slot.endTime})`, "info");
-      
-      // Cache-busting timestamp to ensure the live buffer is freshly pulled
-      const freshUrl = slot.url.includes("?") 
-        ? `${slot.url}&_t=${Date.now()}` 
-        : `${slot.url}?_t=${Date.now()}`;
+      statusIcon.textContent = "🔊";
+      statusIcon.className = "w-24 h-24 rounded-3xl bg-emerald-950 border border-emerald-500 flex items-center justify-center text-4xl shadow-[0_0_25px_rgba(16,185,129,0.3)] animate-pulse";
+      slotStatusBadge.textContent = "LIVE BROADCAST";
+      slotStatusBadge.className = "inline-block px-3 py-1 rounded-full text-xs font-semibold bg-emerald-900 text-emerald-200 border border-emerald-600";
+      currentStationTitle.textContent = slot.name;
+      timingInfo.textContent = `Slot: ${slot.startTime} - ${slot.endTime}`;
 
-      audioEl.src = freshUrl;
-      audioEl.load();
-
-      const playPromise = audioEl.play();
-      if (playPromise !== undefined) {
-        playPromise.then(() => {
-          log(`Stream playing: ${slot.name}`, "success");
-          updateMediaSession(slot);
-          renderUIActive(slot);
-        }).catch(err => {
-          log(`Autoplay error for ${slot.name}: ${err.message}. Retrying...`, "error");
-          scheduleReconnect(slot);
+      if ('mediaSession' in navigator) {
+        navigator.mediaSession.metadata = new MediaMetadata({
+          title: slot.name,
+          artist: "Live Radio Stream",
+          album: `${slot.startTime} - ${slot.endTime}`
         });
       }
+      renderSlots();
     }
 
-    function stopStationStream(reason = "Outside scheduled slots") {
-      if (activeSlotId !== null || !audioEl.paused) {
-        log(`Stopping live stream: ${reason}`, "info");
-        audioEl.pause();
-        audioEl.removeAttribute("src");
-        audioEl.load();
-        activeSlotId = null;
-        updateMediaSession(null);
-        renderUISilent();
-      }
+    function transitionToSilence() {
+      activeSlotId = null;
+      setSilentCarrier();
+
+      statusIcon.textContent = "⏳";
+      statusIcon.className = "w-24 h-24 rounded-3xl bg-slate-900 border border-slate-800 flex items-center justify-center text-4xl shadow-xl";
+      slotStatusBadge.textContent = "Armed • Outside Slots";
+      slotStatusBadge.className = "inline-block px-3 py-1 rounded-full text-xs font-semibold bg-amber-950 text-amber-300 border border-amber-800";
+      currentStationTitle.textContent = "Audio Silent";
+      timingInfo.textContent = "Background lock active. Waiting for slot start time.";
+      renderSlots();
     }
 
-    function scheduleReconnect(slot) {
-      if (!isEngineArmed || isReconnecting) return;
-      isReconnecting = true;
-      reconnectAttempts++;
-      const delay = Math.min(2000 * reconnectAttempts, 10000);
-      log(`Stream stalled/failed. Reconnecting in ${delay / 1000}s (Attempt #${reconnectAttempts})...`, "warn");
-
-      setTimeout(() => {
-        if (!isEngineArmed) return;
-        const now = new Date();
-        const currentSlot = getActiveScheduleSlot(now);
-        if (currentSlot && currentSlot.id === slot.id) {
-          isReconnecting = false;
-          playStationStream(currentSlot);
-        } else {
-          isReconnecting = false;
-          activeSlotId = null;
-        }
-      }, delay);
-    }
-
-    // Audio Watchdog Event Listeners
-    audioEl.addEventListener("error", (e) => {
-      if (!isEngineArmed || !activeSlotId) return;
-      log("Stream connection failed/dropped.", "error");
-      const currentSlot = scheduleSlots.find(s => s.id === activeSlotId);
-      if (currentSlot) scheduleReconnect(currentSlot);
-    });
-
-    audioEl.addEventListener("stalled", () => {
-      if (!isEngineArmed || !activeSlotId) return;
-      log("Stream connection stalled by host.", "warn");
-    });
-
-    // --- 7. TICK HANDLER ---
-    function handleClockTick() {
+    function evaluateSchedule() {
       const now = new Date();
-      const hh = String(now.getHours()).padStart(2, "0");
-      const mm = String(now.getMinutes()).padStart(2, "0");
-      const ss = String(now.getSeconds()).padStart(2, "0");
-      clockDisplay.textContent = `${hh}:${mm}:${ss}`;
+      clockDisplay.textContent = now.toTimeString().split(' ')[0];
 
-      if (!isEngineArmed) return;
+      if (!isArmed) return;
 
-      // Ensure audio context remains active
-      if (audioContext && audioContext.state === "suspended") {
-        audioContext.resume();
-      }
-
-      const activeSlot = getActiveScheduleSlot(now);
-
-      if (activeSlot) {
-        if (activeSlotId !== activeSlot.id) {
-          playStationStream(activeSlot);
+      const currentSlot = checkActiveSlot();
+      if (currentSlot) {
+        if (activeSlotId !== currentSlot.id) {
+          transitionToStream(currentSlot);
         }
       } else {
         if (activeSlotId !== null) {
-          stopStationStream("Current time is outside all scheduled slots");
-        } else {
-          renderUISilent();
+          transitionToSilence();
         }
       }
-
-      renderTableHighlights(activeSlot ? activeSlot.id : null);
     }
 
-    // --- 8. UI UPDATERS ---
-    function renderUIActive(slot) {
-      statusIndicatorRing.textContent = "🔊";
-      statusIndicatorRing.className = "w-16 h-16 rounded-2xl bg-emerald-950 border border-emerald-600 flex items-center justify-center text-3xl shrink-0 pulse-active shadow-[0_0_20px_rgba(16,185,129,0.3)]";
-      currentSlotStatus.textContent = "Active Broadcast Window";
-      currentSlotStatus.className = "text-xs font-semibold tracking-wider uppercase text-emerald-400";
-      currentStationTitle.textContent = slot.name;
-      currentTimingDetails.textContent = `Scheduled slot: ${slot.startTime} — ${slot.endTime} • Live`;
-    }
+    mainToggleBtn.addEventListener("click", async () => {
+      if (!isArmed) {
+        isArmed = true;
+        mainToggleBtn.textContent = "Stop Engine";
+        mainToggleBtn.className = "w-full py-4 px-6 rounded-2xl bg-rose-600 hover:bg-rose-500 text-white font-bold text-base shadow-lg transition active:scale-95 flex items-center justify-center gap-2";
 
-    function renderUISilent() {
-      statusIndicatorRing.textContent = "💤";
-      statusIndicatorRing.className = "w-16 h-16 rounded-2xl bg-slate-800 border border-slate-700 flex items-center justify-center text-3xl shrink-0";
-      currentSlotStatus.textContent = "Engine Armed • Waiting For Next Slot";
-      currentSlotStatus.className = "text-xs font-semibold tracking-wider uppercase text-amber-400";
-      currentStationTitle.textContent = "Audio Silent (Outside Slots)";
-      currentTimingDetails.textContent = "Engine is running in background. Stream will automatically start when slot begins.";
-    }
-
-    function renderTableRows() {
-      slotsTableBody.innerHTML = "";
-      scheduleSlots.forEach(slot => {
-        const startM = parseTimeToMinutes(slot.startTime);
-        const endM = parseTimeToMinutes(slot.endTime);
-        const durationMins = endM >= startM ? (endM - startM) : (1440 - startM + endM);
-
-        const tr = document.createElement("tr");
-        tr.id = `row-${slot.id}`;
-        tr.className = "hover:bg-slate-800/40 transition-colors";
-        tr.innerHTML = `
-          <td class="py-3 px-4 font-sans font-semibold text-slate-200">${slot.name}</td>
-          <td class="py-3 px-4 text-emerald-400 font-bold">${slot.startTime} &rarr; ${slot.endTime}</td>
-          <td class="py-3 px-4 text-slate-400">${durationMins} mins</td>
-          <td class="py-3 px-4 text-center">
-            <span id="badge-${slot.id}" class="px-2 py-0.5 rounded-full text-[10px] bg-slate-800 text-slate-400 border border-slate-700">Scheduled</span>
-          </td>
-          <td class="py-3 px-4 text-right">
-            <button onclick="testSetSlotNow('${slot.id}')" class="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded text-[11px] border border-slate-700 transition">
-              ⚡ Test (Set Now)
-            </button>
-          </td>
-        `;
-        slotsTableBody.appendChild(tr);
-      });
-    }
-
-    function renderTableHighlights(activeId) {
-      scheduleSlots.forEach(slot => {
-        const row = document.getElementById(`row-${slot.id}`);
-        const badge = document.getElementById(`badge-${slot.id}`);
-        if (!row || !badge) return;
-
-        if (slot.id === activeId) {
-          row.className = "bg-emerald-950/40 border-l-4 border-emerald-500 font-bold";
-          badge.className = "px-2.5 py-0.5 rounded-full text-[10px] bg-emerald-900 text-emerald-200 border border-emerald-600 animate-pulse";
-          badge.textContent = "STREAMING LIVE";
-        } else {
-          row.className = "hover:bg-slate-800/40 transition-colors";
-          badge.className = "px-2 py-0.5 rounded-full text-[10px] bg-slate-800 text-slate-400 border border-slate-700";
-          badge.textContent = "Scheduled";
-        }
-      });
-    }
-
-    // --- 9. ENGINE TOGGLE ---
-    async function startEngine() {
-      isEngineArmed = true;
-      toggleEngineBtn.textContent = "Stop Engine";
-      toggleEngineBtn.className = "px-6 py-3 rounded-xl font-bold text-sm shadow-lg transition-all duration-200 bg-rose-600 hover:bg-rose-500 text-white flex items-center gap-2";
-      engineStateBadge.innerHTML = '<span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span> Active & Guarded';
-      engineStateBadge.className = "inline-flex items-center gap-1.5 px-2.5 py-0.5 mt-1 rounded-full text-xs font-medium bg-emerald-950 text-emerald-300 border border-emerald-800";
-
-      // 1. Start unthrottled Web Worker
-      startWorkerTimer();
-      // 2. Start silent keep-alive audio carrier (locks background execution)
-      startKeepAliveCarrier();
-      // 3. Acquire system Wake Lock
-      await requestWakeLock();
-
-      log("Engine armed. Tab can now be minimized or placed in background.", "success");
-      handleClockTick();
-    }
-
-    function stopEngine() {
-      isEngineArmed = false;
-      stopStationStream("Engine disarmed by user");
-      stopKeepAliveCarrier();
-      stopWorkerTimer();
-      releaseWakeLock();
-
-      toggleEngineBtn.textContent = "Start Background Engine";
-      toggleEngineBtn.className = "px-6 py-3 rounded-xl font-bold text-sm shadow-lg transition-all duration-200 bg-emerald-500 hover:bg-emerald-400 text-slate-950 flex items-center gap-2";
-      engineStateBadge.innerHTML = '<span class="w-2 h-2 rounded-full bg-rose-500"></span> Disarmed (Idle)';
-      engineStateBadge.className = "inline-flex items-center gap-1.5 px-2.5 py-0.5 mt-1 rounded-full text-xs font-medium bg-rose-950 text-rose-300 border border-rose-800";
-
-      currentSlotStatus.textContent = "Awaiting Engine Activation";
-      currentSlotStatus.className = "text-xs font-semibold tracking-wider uppercase text-slate-400";
-      currentStationTitle.textContent = "No Station Active";
-      currentTimingDetails.textContent = 'Click "Start Background Engine" to activate.';
-      renderTableHighlights(null);
-      log("Engine stopped.", "warn");
-    }
-
-    toggleEngineBtn.addEventListener("click", () => {
-      if (!isEngineArmed) {
-        startEngine();
+        // Required user-initiated audio invocation
+        setSilentCarrier();
+        initWorker();
+        evaluateSchedule();
       } else {
-        stopEngine();
+        isArmed = false;
+        activeSlotId = null;
+        if (worker) worker.terminate();
+        player.pause();
+        player.removeAttribute("src");
+
+        mainToggleBtn.textContent = "Arm Mobile Engine";
+        mainToggleBtn.className = "w-full py-4 px-6 rounded-2xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-base shadow-lg transition active:scale-95 flex items-center justify-center gap-2";
+        statusIcon.textContent = "⏸️";
+        statusIcon.className = "w-24 h-24 rounded-3xl bg-slate-900 border border-slate-800 flex items-center justify-center text-4xl shadow-xl";
+        slotStatusBadge.textContent = "Engine Disarmed";
+        slotStatusBadge.className = "inline-block px-3 py-1 rounded-full text-xs font-semibold bg-slate-800 text-slate-400 border border-slate-700";
+        currentStationTitle.textContent = "No Active Stream";
+        timingInfo.textContent = "Tap above to re-arm.";
+        renderSlots();
       }
     });
 
-    // --- 10. QUICK TEST HELPER ---
-    window.testSetSlotNow = function(slotId) {
+    function renderSlots() {
+      slotsList.innerHTML = scheduleSlots.map(s => {
+        const isCurrent = activeSlotId === s.id;
+        return `
+          <div class="p-2.5 rounded-xl border ${isCurrent ? 'bg-emerald-950/40 border-emerald-500' : 'bg-slate-900 border-slate-800'} flex items-center justify-between text-xs">
+            <div>
+              <div class="font-bold ${isCurrent ? 'text-emerald-400' : 'text-slate-200'}">${s.name}</div>
+              <div class="font-mono text-slate-400 text-[11px]">${s.startTime} - ${s.endTime}</div>
+            </div>
+            <button onclick="testSlot('${s.id}')" class="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded border border-slate-700">Test</button>
+          </div>
+        `;
+      }).join('');
+    }
+
+    window.testSlot = function(id) {
       const now = new Date();
-      const h = now.getHours();
-      const m = now.getMinutes();
+      const startH = String(now.getHours()).padStart(2, '0');
+      const startM = String(now.getMinutes()).padStart(2, '0');
+      const future = new Date(now.getTime() + 10 * 60000);
+      const endH = String(future.getHours()).padStart(2, '0');
+      const endM = String(future.getMinutes()).padStart(2, '0');
 
-      const startH = String(h).padStart(2, "0");
-      const startM = String(m).padStart(2, "0");
-      
-      const futureDate = new Date(now.getTime() + 10 * 60000); // 10 minutes slot
-      const endH = String(futureDate.getHours()).padStart(2, "0");
-      const endM = String(futureDate.getMinutes()).padStart(2, "0");
-
-      const target = scheduleSlots.find(s => s.id === slotId);
-      if (target) {
-        target.startTime = `${startH}:${startM}`;
-        target.endTime = `${endH}:${endM}`;
-        log(`Adjusted ${target.name} slot to ${target.startTime} - ${target.endTime} for live testing.`, "info");
-        renderTableRows();
-        if (isEngineArmed) handleClockTick();
+      const s = scheduleSlots.find(x => x.id === id);
+      if (s) {
+        s.startTime = `${startH}:${startM}`;
+        s.endTime = `${endH}:${endM}`;
+        renderSlots();
+        if (isArmed) evaluateSchedule();
       }
     };
 
-    // Volume Slider
-    volumeSlider.addEventListener("input", (e) => {
-      const val = parseFloat(e.target.value);
-      audioEl.volume = val;
-      volumePercent.textContent = `${Math.round(val * 100)}%`;
-    });
-
-    clearLogsBtn.addEventListener("click", () => {
-      logConsole.innerHTML = "";
-    });
-
-    // Re-acquire Wake Lock when tab visibility returns (system security policy requirement)
-    document.addEventListener("visibilitychange", async () => {
-      if (document.visibilityState === "visible" && isEngineArmed) {
-        await requestWakeLock();
+    renderSlots();
+    setInterval(() => {
+      if (!isArmed) {
+        const now = new Date();
+        clockDisplay.textContent = now.toTimeString().split(' ')[0];
       }
-    });
-
-    // Initialize UI on load
-    audioEl.volume = 0.8;
-    renderTableRows();
-    handleClockTick();
-    setInterval(handleClockTick, 1000); // UI fallback clock
+    }, 1000);
   </script>
 </body>
 </html>
